@@ -1,0 +1,12 @@
+name: Auto Release
+
+on: 
+  push:
+    branches: 
+      - main
+permissions:
+  contents: write
+  
+jobs:
+  call-auto-release:
+    uses: amirm64/actions/.github/workflows/auto-release.yml@main

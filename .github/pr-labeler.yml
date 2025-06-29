@@ -1,0 +1,5 @@
+feature: ['feature/*', 'feat/*']
+docs: ['docs/*']
+chore :hamer:: ['chore/*']
+test: ['test/*']
+fix: ['fix/*']
