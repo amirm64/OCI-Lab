@@ -1,0 +1,13 @@
+#cloud-config
+write_files:
+  - path: /etc/motd
+    permissions: '0644'
+    owner: root:root
+    content: |
+      ********************************************************************
+      *  WARNING: Unauthorized access to this system is prohibited.      *
+      *  All connections are monitored and logged.                       *
+      *  Disconnect immediately if you are not an authorized user.       *
+      ********************************************************************
+runcmd:
+  - echo "proxy-micro cloud-init completed" >> /var/log/cloud-init.log
