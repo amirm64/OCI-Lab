@@ -1,0 +1,124 @@
+# name: OCI Terraform CI/CD
+
+# on:
+#   schedule:
+#     - cron:  '30 * * * *'
+
+# env:
+#   # Terraform variables → provider block picks them up automatically
+#   TF_VAR_tenancy_ocid:      ${{ secrets.OCI_TENANCY_OCID }}
+#   TF_VAR_user_ocid:         ${{ secrets.OCI_USER_OCID }}
+#   TF_VAR_fingerprint:       ${{ secrets.OCI_FINGERPRINT }}
+#   TF_VAR_region:            ${{ secrets.OCI_REGION }}
+#   TF_VAR_private_key_path:  /home/runner/.oci/oci_api_key.pem
+#   TF_VAR_compartment_ocid:  ${{ secrets.OCI_COMPARTMENT_OCID }}
+#   TF_VAR_ssh_public_key:    ${{ secrets.SSH_PUBLIC_KEY }}
+#   TF_VAR_notify_email:      ${{ secrets.NOTIFY_EMAIL }}
+
+# jobs:
+#   terraform:
+#     runs-on: ubuntu-latest
+#     defaults:
+#       run:
+#         shell: bash
+
+#     steps:
+#     - name: Check out repo
+#       uses: actions/checkout@v4
+
+#     # ----- Write the OCI API private key -------------------------------
+#     - name: Re-hydrate OCI private key
+#       run: |
+#         mkdir -p ~/.oci
+#         echo "${{ secrets.OCI_PRIVATE_KEY_B64 }}" | base64 -d > ~/.oci/oci_api_key.pem
+#         chmod 600 ~/.oci/oci_api_key.pem
+
+#     # ----- Quick sanity check with OCI CLI -----------------------------
+#     - name: Test OCI auth (whoami)
+#       uses: oracle-actions/run-oci-cli-command@v1
+#       with:
+#         command: 'iam region list'
+#       env:
+#         OCI_CLI_AUTH: api_key
+#         OCI_CLI_USER:        ${{ secrets.OCI_USER_OCID }}
+#         OCI_CLI_TENANCY:     ${{ secrets.OCI_TENANCY_OCID }}
+#         OCI_CLI_FINGERPRINT: ${{ secrets.OCI_FINGERPRINT }}
+#         OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_PRIVATE_KEY_B64 }}
+#         OCI_CLI_REGION:      ${{ secrets.OCI_REGION }}
+
+#     # ----- Terraform ---------------------------------------------------
+#     - name: Set up Terraform
+#       uses: hashicorp/setup-terraform@v3
+#       with:
+#         terraform_version: 1.8.x
+
+#     - name: Terraform init
+#       run: terraform init -input=false -no-color
+
+#     - name: Terraform fmt (check)
+#       run: terraform fmt -check -recursive
+
+#     - name: Terraform validate
+#       run: terraform validate -no-color
+
+#     - name: Terraform plan
+#       id: plan
+#       run: terraform plan -input=false -no-color -out=plan.tfplan
+
+#     - name: Upload plan as artifact (PR view)
+#       uses: actions/upload-artifact@v4
+#       with:
+#         name: tfplan
+#         path: plan.tfplan
+#       if: github.event_name == 'pull_request'
+
+#     # ----- Auto-apply only on merge to main ----------------------------
+#     - name: Terraform apply
+#       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+#       run: terraform apply -input=false -auto-approve plan.tfplan
+
+name: Auto-launch OCI free VMs
+
+on:
+  schedule:
+    - cron: '30 * * * *'   # run every hour UTC+0:30, adjust as needed
+  workflow_dispatch:
+
+env:
+  TF_VAR_tenancy_ocid:      ${{ secrets.OCI_TENANCY_OCID }}
+  TF_VAR_user_ocid:         ${{ secrets.OCI_USER_OCID }}
+  TF_VAR_fingerprint:       ${{ secrets.OCI_FINGERPRINT }}
+  TF_VAR_region:            ${{ secrets.OCI_REGION }}
+  TF_VAR_private_key_path:  /home/runner/.oci/oci_api_key.pem
+  TF_VAR_compartment_ocid:  ${{ secrets.OCI_COMPARTMENT_OCID }}
+  TF_VAR_ssh_public_key:    ${{ secrets.SSH_PUBLIC_KEY }}
+  TF_VAR_notify_email:      ${{ secrets.NOTIFY_EMAIL }}
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Re-hydrate OCI key
+      run: |
+        mkdir -p ~/.oci
+        echo "${{ secrets.OCI_PRIVATE_KEY_B64 }}" | base64 -d > ~/.oci/oci_api_key.pem
+        chmod 600 ~/.oci/oci_api_key.pem
+
+    - uses: hashicorp/setup-terraform@v3
+      with: { terraform_version: 1.8.x }
+
+    - name: Attempt launch (cycle ADs)
+      run: |
+        for ad in 0 1 2; do
+          echo ">>> Trying AD $ad …"
+          terraform init -input=false -no-color || exit 1
+          if terraform apply -auto-approve -input=false -no-color -var="ad_index=$ad" ; then
+            echo "SUCCESS in AD $ad"
+            exit 0
+          fi
+          echo "No capacity in AD $ad."
+        done
+        echo "All ADs full; will retry next run."
+        exit 0
