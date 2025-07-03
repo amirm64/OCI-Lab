@@ -168,7 +168,7 @@ resource "oci_budget_alert_rule" "zero_alert" {
   display_name   = "free-tier-spend"
   type           = "ACTUAL"
   threshold_type = "ABSOLUTE"
-  threshold      = 0.01
+  threshold      = 1
   message        = "Spend has exceeded zero – investigate non-free resources!"
   recipients     = var.notify_email
 }
