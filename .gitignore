@@ -11,3 +11,4 @@
 *.tfplan.json
 .terraformrc
 terraform.rc
+tfplan
