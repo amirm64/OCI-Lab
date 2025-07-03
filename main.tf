@@ -72,6 +72,30 @@ resource "oci_core_instance" "proxy" {
   }
 }
 
+resource "oci_core_internet_gateway" "igw" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = data.oci_core_vcn.selected.id
+  display_name   = "free-igw"
+  enabled        = true
+}
+
+resource "oci_core_route_table" "proxy_rt" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = data.oci_core_vcn.selected.id
+  display_name   = "proxy-rt-igw"
+
+  route_rules {
+    destination       = "0.0.0.0/0"
+    destination_type  = "CIDR_BLOCK"
+    network_entity_id = oci_core_internet_gateway.igw.id
+  }
+}
+
+resource "oci_core_route_table_attachment" "proxy_subnet_rt" {
+  subnet_id      = oci_core_subnet.proxy_subnet.id
+  route_table_id = oci_core_route_table.proxy_rt.id
+}
+
 # ── App instances (Arm) ─────────────────────────────────────────────────
 resource "oci_core_instance" "app" {
   count      = var.app_instance_count
