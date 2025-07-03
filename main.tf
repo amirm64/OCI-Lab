@@ -129,6 +129,30 @@ resource "oci_core_instance" "app" {
   }
 }
 
+resource "oci_core_nat_gateway" "nat" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = data.oci_core_vcn.selected.id
+  display_name   = "free-natgw"
+  block_traffic  = false   # allow outbound
+}
+
+resource "oci_core_route_table" "apps_rt" {
+  compartment_id = var.compartment_ocid
+  vcn_id         = data.oci_core_vcn.selected.id
+  display_name   = "apps-rt-nat"
+
+  route_rules {
+    destination       = "0.0.0.0/0"
+    destination_type  = "CIDR_BLOCK"
+    network_entity_id = oci_core_nat_gateway.nat.id
+  }
+}
+
+resource "oci_core_route_table_attachment" "apps_subnet_rt" {
+  subnet_id      = oci_core_subnet.apps_subnet.id
+  route_table_id = oci_core_route_table.apps_rt.id
+}
+
 # ── Budget €1 guard-rail ─────────────────────────────────────────────
 resource "oci_budget_budget" "guardrail" {
   compartment_id = var.tenancy_ocid
